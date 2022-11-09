@@ -93,7 +93,7 @@ def load_ascad(ascad_database_file, noise_level, load_metadata=False):
     X_attack = X_attack.reshape((X_attack.shape[0], X_attack.shape[1]))
 
     Y_attack = np.array(in_file['Attack_traces/labels'])
-    correct_key = in_file['Attack_traces/metadata']['key'][0:2]
+    correct_key = in_file['Attack_traces/metadata']['key'][0,2]
     if load_metadata == False:
         return (X_profiling, Y_profiling), (X_attack, Y_attack), correct_key
     else:
