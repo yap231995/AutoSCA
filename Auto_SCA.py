@@ -11,6 +11,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #!/usr/bin/env python
 
 import tensorflow.keras as tk
+from matplotlib import pyplot as plt
 from tensorflow.keras.models import *
 from tensorflow.keras.optimizers import *
 from tensorflow.keras import layers
@@ -23,10 +24,10 @@ from tensorflow.python.ops import math_ops
 from tensorflow.python.keras.utils import metrics_utils
 from tensorflow.python.ops.losses import util as tf_losses_utils
 
-import kerastuner as kt
-from kerastuner.tuners import *
-from kerastuner.engine.hypermodel import HyperModel
-from kerastuner.engine.hyperparameters import HyperParameters
+import keras_tuner as kt
+from keras_tuner.tuners import *
+from keras_tuner.engine.hypermodel import HyperModel
+from keras_tuner.engine.hyperparameters import HyperParameters
 
 import sys
 import h5py
@@ -92,10 +93,11 @@ def load_ascad(ascad_database_file, noise_level, load_metadata=False):
     X_attack = X_attack.reshape((X_attack.shape[0], X_attack.shape[1]))
 
     Y_attack = np.array(in_file['Attack_traces/labels'])
+    correct_key = in_file['Attack_traces/metadata']['key'][0:2]
     if load_metadata == False:
-        return (X_profiling, Y_profiling), (X_attack, Y_attack)
+        return (X_profiling, Y_profiling), (X_attack, Y_attack), correct_key
     else:
-        return (X_profiling[:50000], Y_profiling[:50000]), (X_attack[:10000], Y_attack[:10000]), (in_file['Profiling_traces/metadata']['plaintext'][:50000], in_file['Attack_traces/metadata']['plaintext'][:10000])
+        return (X_profiling[:50000], Y_profiling[:50000]), (X_attack[:10000], Y_attack[:10000]), (in_file['Profiling_traces/metadata']['plaintext'][:50000], in_file['Attack_traces/metadata']['plaintext'][:10000]),correct_key
 
 
 def labelize(plaintexts, keys):
@@ -356,17 +358,16 @@ def build_model(hp):
 
 
 if __name__ == "__main__":
-    root = 'root to the data'
-    save_root = 'root the save the searching history'
+    root = './'
+    save_root = './model'
     
     searching_method = 'BO'
-    objective = 'val_lm' # 'val_lm/val_key_rank/val_acc'
-    dataset = 'ASCAD'
-    correct_key = 224
+    objective = 'val_accuracy' # 'val_lm/val_key_rank/val_acc'
+    dataset = 'ASCAD_rand'
     leakage = 'HW'
-    attack_model = 'MLP'
+    attack_model = 'CNN'
     noise_level = 0
-    max_trails = 1
+    max_trails = 50
     naming_index = 'TEST'
 
     nb_traces_attacks = 2000
@@ -374,12 +375,13 @@ if __name__ == "__main__":
     noise_level = 0
 
     if dataset == 'ASCAD':
-        data_root = 'ASCAD/Base_desync0.h5'
+        data_root = 'Dataset/ASCAD.h5'
     elif dataset == 'ASCAD_rand':
-        data_root = 'ASCAD_rand/ascad-variable.h5'
+        data_root = 'Dataset/ASCAD_variable.h5'
 
     # load the data and normalize it
-    (X_profiling, Y_profiling), (X_attack, Y_attack), (plt_profiling, plt_attack) = load_ascad(root + data_root, noise_level, load_metadata=True)
+    (X_profiling, Y_profiling), (X_attack, Y_attack), (plt_profiling, plt_attack), correct_key = load_ascad(root + data_root, noise_level, load_metadata=True)
+    print("correct key:", correct_key)
     input_length = len(X_profiling[0])
     scaler = StandardScaler()
     X_profiling = scaler.fit_transform(X_profiling)
@@ -424,6 +426,7 @@ if __name__ == "__main__":
     Y_profiling = np.concatenate((to_categorical(Y_profiling, num_classes=classes), np.zeros((len(plt_profiling), 1)), plt_profiling), axis=1)
     Y_attack = np.concatenate((to_categorical(Y_attack, num_classes=classes), np.ones((len(plt_attack), 1)), plt_attack), axis=1)
 
+
     # select the searching method    
     if searching_method == 'BO':
         print('Searching method: BO')
@@ -457,8 +460,9 @@ if __name__ == "__main__":
     # Attack on the test traces with 10 epochs
     predictions = model.predict(X_attack[nb_traces_attacks:])
     avg_rank = np.array(perform_attacks(5000, predictions, plt_attack, nb_attacks=10, byte=2, shuffle=True, output_rank=True))
-    print('GE smaller that 1:', np.argmax(avg_rank < 1))
-    print('GE smaller that 5:', np.argmax(avg_rank < 5))
+    print('GE: ', avg_rank)
+    # print('GE smaller that 1:', np.argmax(avg_rank < 1))
+    # print('GE smaller that 5:', np.argmax(avg_rank < 5))
 
     print('Retrain the best model with 50 epochs...')
     best_hp = tuner.get_best_hyperparameters()[0]
@@ -468,6 +472,15 @@ if __name__ == "__main__":
     # Attack on the test traces with 50 epochs
     predictions = model.predict(X_attack[nb_traces_attacks:])
     avg_rank = np.array(perform_attacks(5000, predictions, plt_attack, nb_attacks=10, byte=2, shuffle=True, output_rank=True))
-    print(np.shape(avg_rank))
-    print('GE smaller that 1:', np.argmax(avg_rank < 1))
-    print('GE smaller that 5:', np.argmax(avg_rank < 5))
+    model.save(save_root+"/best_model_50_epoch")
+
+
+    print('GE: ', avg_rank)
+    # print('GE smaller that 1:', np.argmax(avg_rank < 1))
+    # print('GE smaller that 5:', np.argmax(avg_rank < 5))
+    plt.plot(avg_rank)
+    plt.show()
+
+
+
+
