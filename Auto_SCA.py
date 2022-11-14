@@ -9,7 +9,8 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 '''
 
 #!/usr/bin/env python
-
+import os 
+#os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1' # this will stop the tensorflow log. more information: https://lindevs.com/disable-tensorflow-2-debugging-information
 import tensorflow.keras as tk
 from matplotlib import pyplot as plt
 from tensorflow.keras.models import *
@@ -323,7 +324,7 @@ def build_model_mlp(hp):
 
 
 def build_model(hp):
-    activation = hp.Choice('activation', values=["relu", "tanh", "selu", "elu"])
+    activation = hp.Choice('activation', values=["relu", "selu"])  #"tanh", "elu"
 
     model = tk.models.Sequential()
     model.add(Conv1D(hp.Int('conv_0_filters', min_value=8, max_value=256, step=8),
@@ -358,7 +359,9 @@ def build_model(hp):
 
 
 if __name__ == "__main__":
+    
     root = './'
+
     save_root = './model'
     
     searching_method = 'BO'
@@ -409,8 +412,11 @@ if __name__ == "__main__":
     ranked_LDD = ss.rankdata(calculate_LDD(correct_key, mode=leakage))
 
     # select the objective function
+    mirrored_strategy = tf.distribute.MirroredStrategy()
     if objective == 'val_accuracy':
-        metric=[acc_Metric(), key_rank_Metric()] 
+        with mirrored_strategy.scope():
+            metric=[acc_Metric(), key_rank_Metric()] 
+        #metric = ['accuracy']
         direction = 'max'   
     elif objective == 'val_loss':
         direction = 'min'       
@@ -430,13 +436,15 @@ if __name__ == "__main__":
     # select the searching method    
     if searching_method == 'BO':
         print('Searching method: BO')
-        tuner = BayesianOptimization(build_model,
-                                objective=kt.Objective(objective, direction=direction),
-                                    max_trials=max_trails,
-                                    executions_per_trial=1,
-                                    directory=save_root,
-                                    project_name=dataset + '_' + attack_model + '_' + leakage + '_'  + searching_method + '_' + objective + '_' + str(2),
-                                    overwrite=True)
+        with mirrored_strategy.scope():
+            tuner = BayesianOptimization(build_model,
+                                    objective=kt.Objective(objective, direction=direction),
+                                        max_trials=max_trails,
+                                        executions_per_trial=1,
+                                        distribution_strategy = mirrored_strategy, #tf.distribute.MirroredStrategy(), #['/gpu:0', '/gpu:1', '/gpu:2', '/gpu:3']),
+                                        directory=save_root,
+                                        project_name=dataset + '_' + attack_model + '_' + leakage + '_'  + searching_method + '_' + objective + '_' + str(2),
+                                        overwrite=True)
     else:
         print('Searching method: RA')
         tuner = RandomSearch(build_model,
