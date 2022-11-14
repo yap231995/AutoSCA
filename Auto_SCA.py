@@ -463,8 +463,8 @@ if __name__ == "__main__":
 
     tuner.search_space_summary()
 
-
-    tuner.search(x=X_profiling, y=Y_profiling, epochs=10, batch_size=32, validation_data=(X_attack[:nb_traces_attacks], Y_attack[:nb_traces_attacks]), verbose=2)
+    with mirrored_strategy.scope():
+        tuner.search(x=X_profiling, y=Y_profiling, epochs=10, batch_size=32, validation_data=(X_attack[:nb_traces_attacks], Y_attack[:nb_traces_attacks]), verbose=2)
     tuner.results_summary()
 
 
