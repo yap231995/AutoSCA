@@ -382,6 +382,10 @@ if __name__ == "__main__":
     elif dataset == 'ASCAD_rand':
         data_root = 'Dataset/ASCAD_variable.h5'
 
+    options = tf.data.Options()
+    options.experimental_distribute.auto_shard_policy = tf.data.experimental.AutoShardPolicy.DATA
+
+
     # load the data and normalize it
     (X_profiling, Y_profiling), (X_attack, Y_attack), (plt_profiling, plt_attack), correct_key = load_ascad(root + data_root, noise_level, load_metadata=True)
     print("correct key:", correct_key)
@@ -389,6 +393,8 @@ if __name__ == "__main__":
     scaler = StandardScaler()
     X_profiling = scaler.fit_transform(X_profiling)
     X_attack = scaler.transform(X_attack)
+    X_profiling = X_profiling.with_options(options)
+    X_attack = X_attack.with_options(options)
 
     if attack_model == 'MLP':
         X_profiling = X_profiling.reshape((X_profiling.shape[0], X_profiling.shape[1]))
@@ -431,6 +437,8 @@ if __name__ == "__main__":
 
     Y_profiling = np.concatenate((to_categorical(Y_profiling, num_classes=classes), np.zeros((len(plt_profiling), 1)), plt_profiling), axis=1)
     Y_attack = np.concatenate((to_categorical(Y_attack, num_classes=classes), np.ones((len(plt_attack), 1)), plt_attack), axis=1)
+    Y_profiling = Y_profiling.with_options(options)
+    Y_attack = Y_attack.with_options(options)
 
 
     # select the searching method    
