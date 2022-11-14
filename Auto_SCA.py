@@ -459,6 +459,8 @@ if __name__ == "__main__":
     tuner.search(x=X_profiling, y=Y_profiling, epochs=10, batch_size=32, validation_data=(X_attack[:nb_traces_attacks], Y_attack[:nb_traces_attacks]), verbose=2)
     tuner.results_summary()
 
+
+
     # Retrain the best model
     print('Retrain the best model with 10 epochs...')
     best_hp = tuner.get_best_hyperparameters()[0]
