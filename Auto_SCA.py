@@ -393,8 +393,7 @@ if __name__ == "__main__":
     scaler = StandardScaler()
     X_profiling = scaler.fit_transform(X_profiling)
     X_attack = scaler.transform(X_attack)
-    X_profiling = X_profiling.with_options(options)
-    X_attack = X_attack.with_options(options)
+
 
     if attack_model == 'MLP':
         X_profiling = X_profiling.reshape((X_profiling.shape[0], X_profiling.shape[1]))
@@ -437,8 +436,7 @@ if __name__ == "__main__":
 
     Y_profiling = np.concatenate((to_categorical(Y_profiling, num_classes=classes), np.zeros((len(plt_profiling), 1)), plt_profiling), axis=1)
     Y_attack = np.concatenate((to_categorical(Y_attack, num_classes=classes), np.ones((len(plt_attack), 1)), plt_attack), axis=1)
-    Y_profiling = Y_profiling.with_options(options)
-    Y_attack = Y_attack.with_options(options)
+
 
 
     # select the searching method    
@@ -464,6 +462,8 @@ if __name__ == "__main__":
                             overwrite=True)
 
     tuner.search_space_summary()
+
+
     tuner.search(x=X_profiling, y=Y_profiling, epochs=10, batch_size=32, validation_data=(X_attack[:nb_traces_attacks], Y_attack[:nb_traces_attacks]), verbose=2)
     tuner.results_summary()
 
