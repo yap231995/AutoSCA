@@ -325,10 +325,11 @@ def build_model_mlp(hp):
 
 def build_model(hp):
     activation = hp.Choice('activation', values=["relu", "selu"])  #"tanh", "elu"
+    optim=hp.Choice("optimizer",["rmsprop","adam"])   #"sgd"
 
     model = tk.models.Sequential()
-    model.add(Conv1D(hp.Int('conv_0_filters', min_value=8, max_value=256, step=8),
-                     hp.Int('conv_0_kernal_size', min_value=2, max_value=10, step=1), padding='same', input_shape=(input_length, 1)))
+    model.add(Conv1D(hp.Int('conv_0_filters', min_value=8, max_value=32, step=4),
+                     hp.Int('conv_0_kernal_size', min_value=2, max_value=20, step=1), padding='same', input_shape=(input_length, 1)))
     model.add(Activation(activation))
     if hp.Choice('pooling_0', ['avg', 'max']) == 'max':
         model.add(MaxPooling1D(2, strides=2))
@@ -336,24 +337,27 @@ def build_model(hp):
         model.add(AveragePooling1D(2, strides=2))
 
     for i in range(hp.Int('n_conv_layers', 1, 3)):
-        model.add(Conv1D(hp.Int('conv_' + str(i + 1) + '_filters', min_value=8, max_value=256, step=8),
-                         hp.Int('conv_' + str(i + 1) + '_kernal_size', min_value=2, max_value=14, step=1), padding='same'))
+        model.add(Conv1D(hp.Int('conv_' + str(i + 1) + '_filters', min_value=8, max_value=32, step=4),
+                         hp.Int('conv_' + str(i + 1) + '_kernal_size', min_value=2, max_value=20, step=1), padding='same'))
         model.add(Activation(activation))
         if hp.Choice('pooling_' + str(i + 1), ['avg', 'max']) == 'max':
-            model.add(MaxPooling1D(hp.Int('maxPooling_' + str(i + 1) + '_size', min_value=2, max_value=5, step=1),
-                                   hp.Int('maxPooling_' + str(i + 1) + '_stride', min_value=2, max_value=10, step=1)))
+            model.add(MaxPooling1D(hp.Int('maxPooling_' + str(i + 1) + '_size', min_value=2, max_value=2, step=1),
+                                   hp.Int('maxPooling_' + str(i + 1) + '_stride', min_value=2, max_value=2, step=1)))
         else:
-            model.add(AveragePooling1D(hp.Int('averagePooling_' + str(i + 1) + '_size', min_value=2, max_value=5, step=1),
-                                       hp.Int('averagePooling_' + str(i + 1) + '_stride', min_value=2, max_value=10, step=1)))
+            model.add(AveragePooling1D(hp.Int('averagePooling_' + str(i + 1) + '_size', min_value=2, max_value=2, step=1),
+                                       hp.Int('averagePooling_' + str(i + 1) + '_stride', min_value=2, max_value=2, step=1)))
 
     model.add(Flatten())
     for j in range(hp.Int('n_dense_layers', 1, 3)):
-        model.add(layers.Dense(units=hp.Int('dense_' + str(j) + '_units', min_value=100, max_value=1600, step=100), activation=activation))
+        model.add(layers.Dense(units=hp.Int('dense_' + str(j) + '_units', min_value=100, max_value=400, step=100), activation=activation))
 
     model.add(Dense(classes))
     model.add(Activation("softmax"))
-    model.compile(optimizer=RMSprop(lr=hp.Choice('learning_rate', values=[1e-3, 5e-4, 1e-4, 5e-5, 1e-5])), loss=custom_loss, metrics=metric)
-
+    if optim == 'adam':
+        model.compile(optimizer=Adam(learning_rate=hp.Choice('learning_rate', values=[1e-3, 5e-4, 1e-4, 5e-5, 1e-5])), loss=custom_loss, metrics=metric)
+    elif optim == 'rmsprop':
+        model.compile(optimizer=RMSprop(learning_rate=hp.Choice('learning_rate', values=[1e-3, 5e-4, 1e-4, 5e-5, 1e-5])), loss=custom_loss, metrics=metric)
+ 
     model.summary()
     return model
 
@@ -364,13 +368,13 @@ if __name__ == "__main__":
 
     save_root = './model'
     
-    searching_method = 'BO'
+    searching_method = 'RA'
     objective = 'val_accuracy' # 'val_lm/val_key_rank/val_acc'
     dataset = 'ASCAD_rand'
     leakage = 'HW'
     attack_model = 'CNN'
     noise_level = 0
-    max_trails = 50
+    max_trails = 2
     naming_index = 'TEST'
 
     nb_traces_attacks = 2000
@@ -417,10 +421,10 @@ if __name__ == "__main__":
     ranked_LDD = ss.rankdata(calculate_LDD(correct_key, mode=leakage))
 
     # select the objective function
-    mirrored_strategy = tf.distribute.MirroredStrategy()
+    #mirrored_strategy = tf.distribute.MirroredStrategy()
     if objective == 'val_accuracy':
-        with mirrored_strategy.scope():
-            metric=[acc_Metric(), key_rank_Metric()] 
+        #with mirrored_strategy.scope():
+        metric=[acc_Metric(), key_rank_Metric()] 
         #metric = ['accuracy']
         direction = 'max'   
     elif objective == 'val_loss':
@@ -463,8 +467,8 @@ if __name__ == "__main__":
 
     tuner.search_space_summary()
 
-    with mirrored_strategy.scope():
-        tuner.search(x=X_profiling, y=Y_profiling, epochs=10, batch_size=32, validation_data=(X_attack[:nb_traces_attacks], Y_attack[:nb_traces_attacks]), verbose=2)
+    #with mirrored_strategy.scope():
+    tuner.search(x=X_profiling, y=Y_profiling, epochs=10, batch_size=32, validation_data=(X_attack[:nb_traces_attacks], Y_attack[:nb_traces_attacks]), verbose=2)
     tuner.results_summary()
 
 
